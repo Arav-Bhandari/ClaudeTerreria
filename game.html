@@ -18,17 +18,17 @@ canvas{position:fixed;left:0;top:0;display:block}
 // ===================== 1. constants, items, recipes =====================
 const W=640,H=240,TS=16,SURF=62,REACH=5.5,DAY=320;
 const AIR=0,DIRT=1,GRASS=2,STONE=3,COPPER=4,IRON=5,LOG=6,LEAF=7,PLANK=8,BENCH=9,FURN=10,TORCH=11,PLAT=12,CHEST=13,CHESTO=14,GOLD=15,AZUR=16,SLATE=17,DOOR=18,DOORO=19,
-  SAND=20,SSTONE=21,CACTUS=22,SNOW=23,ICE=24,NT=25;
+  SAND=20,SSTONE=21,CACTUS=22,SNOW=23,ICE=24,BED=25,NT=26;
 const SOLID=new Uint8Array(NT).fill(1);
-[AIR,LEAF,LOG,BENCH,FURN,TORCH,PLAT,CHEST,CHESTO,DOORO,CACTUS].forEach(t=>SOLID[t]=0); // trunks are walk-through like Terraria
+[AIR,LEAF,LOG,BENCH,FURN,TORCH,PLAT,CHEST,CHESTO,DOORO,CACTUS,BED].forEach(t=>SOLID[t]=0); // trunks are walk-through like Terraria
 const KP=0,KA=1,KS=2,KB=3; // tool kinds: pickaxe, axe, sword, bow
 const TIERS=['Wooden','Copper','Iron','Gold','Azure','Wyrm'],KN=['Pickaxe','Axe','Sword','Bow'];
 const POW=[1,1.9,3,4.4,6.6,9.5],DMG=[7,12,18,26,40,64],SWT=[.42,.36,.31,.27,.23,.2];
 // mining time (s at power 1) per tile, preferred tool, and pickaxe tier required
-const HARD=[0,.5,.5,1.5,2.2,3,1.8,.2,1,1,2,.05,.3,1.2,1.2,4.2,5.5,3.6,.9,.9,.4,1.6,.6,.4,.7];
-const TOOLK=[0,KP,KP,KP,KP,KP,KA,KA,KA,KA,KP,KA,KA,KA,KA,KP,KP,KP,KA,KA,KP,KP,KA,KP,KP];
-const NEEDT=[0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,2,3,1,0,0,0,0,0,0,0];
-const DROP=[0,1,1,3,4,5,6,0,8,9,10,11,12,65,65,15,16,17,28,28,60,61,62,63,64];
+const HARD=[0,.5,.5,1.5,2.2,3,1.8,.2,1,1,2,.05,.3,1.2,1.2,4.2,5.5,3.6,.9,.9,.4,1.6,.6,.4,.7,.9];
+const TOOLK=[0,KP,KP,KP,KP,KP,KA,KA,KA,KA,KP,KA,KA,KA,KA,KP,KP,KP,KA,KA,KP,KP,KA,KP,KP,KA];
+const NEEDT=[0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,2,3,1,0,0,0,0,0,0,0,0];
+const DROP=[0,1,1,3,4,5,6,0,8,9,10,11,12,65,65,15,16,17,28,28,60,61,62,63,64,72];
 const IT={};
 const def=(id,name,o={})=>IT[id]=Object.assign({name},o);
 def(1,'Dirt',{tile:1});def(3,'Stone',{tile:3});def(4,'Copper Ore',{tile:4});def(5,'Iron Ore',{tile:5});
@@ -51,6 +51,11 @@ def(68,'Ominous Lens',{use:'boss1',desc:'Use at night on the surface'});
 def(69,'Watcher Iris',{desc:'Still twitching'});
 def(70,'Wyrm Bait',{use:'boss2',desc:'Use in The Abyss'});
 def(71,'Wyrm Scale',{desc:'Harder than azurite'});
+def(72,'Bed',{tile:BED,desc:'Right click to set your spawn point'});
+// accessories: one of each kind can be worn; each biome hides one in its chests
+def(73,'Cloud in a Jar',{acc:'jump',desc:'Jump again in mid-air. Found in desert ruins'});
+def(74,'Frostrunner Boots',{acc:'speed',desc:'Run 35% faster, grip on ice. Found in tundra ruins'});
+def(75,'Band of Regeneration',{acc:'regen',desc:'Heal faster and sooner. Found in cave chests'});
 // tools: id = 30 + kind*6 + tier. Bows skip the odd early tiers, axes stop at Azure.
 const TOOLID=(k,t)=>30+k*6+t;
 TIERS.forEach((t,ti)=>KN.forEach((k,ki)=>{if(ki===KB&&(ti===1||ti===3)||ki===KA&&ti===5)return;def(TOOLID(ki,ti),t+' '+k,{kind:ki,tier:ti})}));
@@ -68,7 +73,7 @@ for(let t=1;t<5;t++){const b=17+t;
   rc(TOOLID(KP,t),1,[[b,4],[6,3]],1);rc(TOOLID(KA,t),1,[[b,3],[6,3]],1);rc(TOOLID(KS,t),1,[[b,4],[6,2]],1);
   if(t%2===0)rc(TOOLID(KB,t),1,[[b,6],[6,4]],1);
   [8,12,10].forEach((n,p)=>rc(ARMID(t,p),1,[[b,n]],1));}
-rc(68,1,[[23,5],[20,3]],1);rc(70,1,[[69,1],[21,8]],2);
+rc(72,1,[[6,10],[8,8]],1);rc(68,1,[[23,5],[20,3]],1);rc(70,1,[[69,1],[21,8]],2);
 rc(TOOLID(KP,5),1,[[71,10],[21,4]],1);rc(TOOLID(KS,5),1,[[71,14],[21,6]],1);rc(TOOLID(KB,5),1,[[71,12],[21,4]],1);
 const ZONES=['Forest','Caves','Stone Depths','Deep Slate','The Abyss','Desert','Tundra'];
 const BIO=new Uint8Array(W); // surface biome per column: 0 forest, 1 desert, 2 tundra
@@ -110,6 +115,7 @@ function lootFor(x,y){ // deterministic loot per chest position
   if(deep&&r()<.5)L.push([21,1+(r()*2|0)]);
   if(r()<.25)L.push([deep?TOOLID(KB,4):TOOLID(KB,2),1]);
   if(r()<.3)L.push([ARMID(deep?3:2,r()*3|0),1]);
+  const b=BIO[x];if(!deep&&b===1&&r()<.75)L.push([73,1]);else if(!deep&&b===2&&r()<.75)L.push([74,1]);else if(!deep&&!b&&r()<.25)L.push([75,1]);
   return L;
 }
 function gen(sd){
@@ -155,6 +161,7 @@ function gen(sd){
     for(let c=0;c<nch;c++)T[(y+h-2)*W+x+2+(r()*(w-5)|0)]=CHEST;
   };
   for(let i=0;i<14*K;i++)room(10+r()*(W-40)|0,92+r()*60|0,11+r()*5|0,7,PLANK,1);
+  for(const c of[dC,sC])for(let k=0;k<3;k++)room(c-40+r()*70|0,82+r()*40|0,11+r()*4|0,7,c===dC?SSTONE:ICE,1); // biome ruins
   for(let i=0;i<9*K;i++)room(10+r()*(W-40)|0,172+r()*55|0,13+r()*4|0,8,SLATE,2);
   // trees (cacti in the desert, taller pines in the tundra)
   for(let x=4;x<W-4;x+=3+(r()*7|0)){
@@ -190,8 +197,8 @@ const RAMP={
   ice:['#3f7fb8','#7fc0e8','#b0e4f8','#e8fbff'],
   wyrm:['#2a1840','#5a2f7a','#9a5ac8','#e0b0ff'],
 };
-const TRAMP=[null,RAMP.dirt,RAMP.dirt,RAMP.stone,RAMP.stone,RAMP.stone,RAMP.wood,RAMP.grass,RAMP.plank,RAMP.plank,RAMP.stone,RAMP.wood,RAMP.plank,RAMP.wood,RAMP.wood,RAMP.stone,RAMP.stone,RAMP.slate,RAMP.plank,RAMP.plank,RAMP.sand,RAMP.sstone,RAMP.cactus,RAMP.snow,RAMP.ice];
-const PART_COL=[null,RAMP.dirt[2],RAMP.grass[2],RAMP.stone[2],RAMP.copper[2],RAMP.iron[2],RAMP.wood[2],RAMP.grass[1],RAMP.plank[2],RAMP.plank[1],RAMP.stone[1],RAMP.gold[2],RAMP.plank[2],RAMP.wood[2],RAMP.wood[1],RAMP.gold[2],RAMP.azure[2],RAMP.slate[2],RAMP.plank[2],RAMP.plank[2],RAMP.sand[2],RAMP.sstone[2],RAMP.cactus[2],RAMP.snow[2],RAMP.ice[2]];
+const TRAMP=[null,RAMP.dirt,RAMP.dirt,RAMP.stone,RAMP.stone,RAMP.stone,RAMP.wood,RAMP.grass,RAMP.plank,RAMP.plank,RAMP.stone,RAMP.wood,RAMP.plank,RAMP.wood,RAMP.wood,RAMP.stone,RAMP.stone,RAMP.slate,RAMP.plank,RAMP.plank,RAMP.sand,RAMP.sstone,RAMP.cactus,RAMP.snow,RAMP.ice,RAMP.plank];
+const PART_COL=[null,RAMP.dirt[2],RAMP.grass[2],RAMP.stone[2],RAMP.copper[2],RAMP.iron[2],RAMP.wood[2],RAMP.grass[1],RAMP.plank[2],RAMP.plank[1],RAMP.stone[1],RAMP.gold[2],RAMP.plank[2],RAMP.wood[2],RAMP.wood[1],RAMP.gold[2],RAMP.azure[2],RAMP.slate[2],RAMP.plank[2],RAMP.plank[2],RAMP.sand[2],RAMP.sstone[2],RAMP.cactus[2],RAMP.snow[2],RAMP.ice[2],'#d83a4a'];
 const SKYP=['#080a1c','#0f1433','#1a2150','#2a3270','#4b2a6e','#8a3f78','#d0605a','#f0904f','#f8c06a','#2e5fc0','#3f7fdc','#5f9ff0','#86c0fa','#b4def8'];
 // 8 bands top->bottom per keyframe: night, predawn, sunrise, morning, day
 const SKYK=[[0,0,1,1,2,2,3,3],[1,2,3,4,4,5,5,6],[3,4,5,5,6,6,7,8],[9,10,11,11,12,12,13,8],[9,10,10,11,12,12,13,13]];
@@ -325,8 +332,10 @@ TD[CACTUS]=c=>{const k=RAMP.cactus;dot(c,3,0,k[1],10,16);dot(c,3,0,k[0],2,16);do
   for(let j=1;j<16;j+=4){dot(c,2,j,WHITE);dot(c,13,j+2,WHITE)}};
 TD[SNOW]=c=>{base(c,RAMP.snow);dot(c,0,0,RAMP.snow[3],16,2)};
 TD[ICE]=c=>{base(c,RAMP.ice);for(let k=0;k<3;k++){const x=tr()*10|0,y=tr()*10|0;for(let d=0;d<5;d++)dot(c,x+d,y+5-d,RAMP.ice[3])}};
+TD[BED]=c=>{const w=RAMP.wood;dot(c,0,4,w[2],2,12);dot(c,14,7,w[2],2,9);dot(c,0,12,w[1],16,2);dot(c,2,8,'#e8e0d8',4,4);dot(c,2,8,WHITE,4,1);
+  dot(c,6,9,'#d83a4a',8,3);dot(c,6,9,'#ff8a8e',8,1);dot(c,6,11,'#8c1f3a',8,1)};
 TD[DOORO]=c=>{const p=RAMP.plank,w=RAMP.wood;dot(c,0,0,p[1],4,16);dot(c,0,0,p[3],1,16);dot(c,3,0,w[0],1,16);dot(c,1,3,p[2],2,3);dot(c,1,10,p[2],2,3);dot(c,3,7,RAMP.gold[2],1,2)};
-const DECOR=new Set([LEAF,BENCH,FURN,TORCH,PLAT,CHEST,CHESTO,DOORO,CACTUS]);
+const DECOR=new Set([LEAF,BENCH,FURN,TORCH,PLAT,CHEST,CHESTO,DOORO,CACTUS,BED]);
 for(let t=1;t<NT;t++){
   TEX[t]=[];const nv=t===TORCH?3:4;
   for(let v=0;v<nv;v++){const cv=mkc(16,16),c=cv.getContext('2d');TD[t](c);
@@ -394,6 +403,9 @@ for(const id in IT){const it=IT[id];
     else if(id==68){disc(c,8,8,6,6,'#4b2a6e');disc(c,8,8,5,5,'#e8e0d8');disc(c,8,8,3,3,'#d83a4a');dot(c,7,7,INK,2,2);dot(c,6,5,WHITE)}
     else if(id==69){disc(c,8,8,5,5,'#d83a4a');disc(c,8,8,3,3,'#8c1f3a');dot(c,7,7,INK,2,2);dot(c,6,5,'#ff8a8e',2,1);line(c,13,12,15,15,1,'#8c1f3a')}
     else if(id==70){line(c,4,13,12,4,3,RAMP.wyrm[1]);line(c,4,13,12,4,1,RAMP.wyrm[2]);disc(c,12,4,3,3,RAMP.azure[2]);dot(c,11,3,WHITE)}
+    else if(id==73){dot(c,5,2,RAMP.wood[2],6,2);dot(c,4,4,'#cfd3e4',8,10);dot(c,5,5,'#e8f0fa',6,8);disc(c,8,9,3,2,WHITE);dot(c,6,7,WHITE,2,1);dot(c,4,13,'#8f8396',8,1)}
+    else if(id==74){const b=RAMP.ice;dot(c,3,2,b[1],5,9);dot(c,3,10,b[1],10,3);dot(c,3,12,b[0],11,2);dot(c,4,3,b[3],2,6);dot(c,2,2,WHITE,7,2);dot(c,9,11,b[3],3,1)}
+    else if(id==75){disc(c,8,9,6,5,RAMP.gold[1]);disc(c,8,9,4,3,'rgba(0,0,0,0)');c.clearRect(5,7,7,5);dot(c,6,3,'#d83a4a',4,3);dot(c,7,3,'#ff8a8e',1,1);dot(c,4,7,RAMP.gold[3],2,1)}
     else if(id==71){for(let j=2;j<14;j++){const k=Math.round(5*Math.sin((j-2)/12*Math.PI));dot(c,8-k,j,RAMP.wyrm[1],k*2+1,1)}dot(c,7,4,RAMP.wyrm[3],2,6);dot(c,5,12,RAMP.wyrm[0],6,1)}
     else if(id>=18&&id<=21){const b=[RAMP.copper,RAMP.iron,RAMP.gold,RAMP.azure][id-18];dot(c,3,6,b[3],10,2);dot(c,2,8,b[2],12,4);dot(c,2,12,b[0],12,1);dot(c,4,6,WHITE,3,1);dot(c,4,9,b[1],8,1)}
   });
@@ -424,17 +436,42 @@ const snd={mine:()=>tone(170+Math.random()*40,90,.06),brk:()=>noise(.14,.12,1800
   roar:()=>{tone(90,40,.7,'sawtooth',.13);noise(.5,.08,500)},hook:()=>tone(800,300,.08,'square',.05),clink:()=>tone(1200,900,.05,'triangle',.06),
   win:()=>[0,1,2,3].forEach(i=>setTimeout(()=>tone(400+i*130,600+i*160,.25,'triangle',.09),i*140))};
 
+// ---- procedural music: a 4-chord loop with a pad, bass and a random arpeggio. The mood follows day/night, depth and bosses,
+// and only switches on bar lines so it never lurches mid-phrase.
+let musicOn=true;const MUS={t:0,step:0,mode:'day',g:null};
+const MOODS={
+  day:{root:60,ch:[[0,4,7],[7,11,14],[9,12,16],[5,9,12]],spd:.24,dens:.55,wave:'triangle'},
+  night:{root:57,ch:[[0,3,7],[5,8,12],[3,7,10],[7,10,14]],spd:.3,dens:.4,wave:'sine'},
+  cave:{root:50,ch:[[0,3,7],[-2,2,5],[0,3,7],[3,7,10]],spd:.34,dens:.3,wave:'sine'},
+  abyss:{root:45,ch:[[0,3,7],[1,5,8],[0,3,7],[-2,1,5]],spd:.4,dens:.25,wave:'sine'},
+  boss:{root:52,ch:[[0,3,7],[0,3,7],[-4,0,3],[-2,2,5]],spd:.14,dens:.85,wave:'square'}};
+function note(m,t,d,type,v){const o=AC.createOscillator(),gn=AC.createGain();o.type=type;o.frequency.value=440*2**((m-69)/12);
+  gn.gain.setValueAtTime(0,t);gn.gain.linearRampToValueAtTime(v,t+.02);gn.gain.exponentialRampToValueAtTime(.001,t+d);o.connect(gn);gn.connect(MUS.g);o.start(t);o.stop(t+d+.05)}
+function musicStep(){
+  if(!AC||muted||!musicOn||AC.state!=='running')return;
+  try{if(!MUS.g){MUS.g=AC.createGain();MUS.g.gain.value=.5;MUS.g.connect(AC.destination)}
+  const now=AC.currentTime;if(MUS.t<now)MUS.t=now+.05;
+  while(MUS.t<now+.2){
+    const s=MUS.step&15,t=MUS.t;
+    if(s===0)MUS.mode=showTitle?'day':enemies.some(e=>ET[e.t].boss)?'boss':P.y>205?'abyss':P.y>hs[clamp(P.x|0,0,W-1)]+14?'cave':daylight()>.35?'day':'night';
+    const M=MOODS[MUS.mode],ch=M.ch[(MUS.step>>4)&3];
+    if(s===0){note(M.root-12+ch[0],t,M.spd*14,'sine',.07);ch.forEach(c=>note(M.root+c,t,M.spd*15,'triangle',.016))}
+    if(MUS.mode==='boss'&&s%2===0)note(M.root-12+ch[0],t,M.spd*1.5,'square',.022);
+    if(Math.random()<M.dens){const c=ch[Math.random()*3|0]+(Math.random()<.4?12:0);note(M.root+12+c,t,M.spd*3,M.wave,M.wave==='square'?.01:.028)}
+    MUS.t+=M.spd;MUS.step++;
+  }}catch(e){}
+}
 const GREY_T='#9aa2bd';
 let time=.15,sel=0,toastT=0,toastM='',toastC=WHITE,placeCd=0,spawnT=3,saveT=5,hitstop=0,potionCd=0,tAbs=0;
 const cam={x:0,y:0,sx:mkSpring(),sy:mkSpring(),look:mkSpring()};
 const shk={x:mkSpring(),y:mkSpring()};
 const keys={},mouse={x:0,y:0,l:false,r:false,tx:0,ty:0,ui:false,rEdge:false};
 const mine={x:-1,y:-1,p:0,chip:0};
-const inv=Array(36).fill(null),POP=Array.from({length:60},()=>mkSpring()),enemies=[],drops=[],parts=[],floats=[],proj=[],amb=[];
+const inv=Array(36).fill(null),POP=Array.from({length:64},()=>mkSpring()),enemies=[],drops=[],parts=[],floats=[],proj=[],amb=[];
 const flash={x:-1,y:-1,t:0}; // red 'invalid' flash on a tile
 const P={x:0,y:0,w:10/16,h:26/16,vx:0,vy:0,hp:100,mhp:100,face:1,coy:0,buf:0,inv:0,swing:0,swingMax:.3,swingKind:0,anim:0,oy:0,dead:0,regen:0,ground:false,
   step:true,drop:false,dist:0,fr:0,lastFr:0,turn:0,skid:0,sq:mkSpring(),idleT:0,fire:0,hurtT:0,spawnX:0,spawnY:0,hx:0,lastVy:0,aimA:0,smear:0,
-  arm:[null,null,null],boss1:false,won:false};
+  arm:[null,null,null],acc:[null,null,null],boss1:false,won:false,bed:-1,jumps:0,auto:0,autoT:0};
 const HK={st:0,x:0,y:0,vx:0,vy:0}; // grappling hook: 0 idle, 1 flying, 2 latched
 let paused=false,openChest=-1,wonT=0;
 const daylight=()=>clamp(.5+1.3*Math.sin(time*6.2832),0,1);
@@ -442,10 +479,12 @@ const toast=(m,c=WHITE)=>{toastM=m;toastC=c;toastT=2.2};
 const kick=a=>{if(RM)a*=.25;shk.x.v+=(Math.random()<.5?-1:1)*a*55;shk.y.v+=(Math.random()<.5?-1:1)*a*55};
 
 // ===================== 9. inventory =====================
-// slot ids: 0-35 backpack (0-8 hotbar), 36-38 armor, 40-57 the open chest
-const getS=i=>i<36?inv[i]:i<39?P.arm[i-36]:openChest>=0?chestOf(openChest)[i-40]:null;
-function setS(i,v){if(i<36)inv[i]=v;else if(i<39)P.arm[i-36]=v;else if(openChest>=0)chestOf(openChest)[i-40]=v}
-const fits=(i,s)=>!s||i<36||i>=40||IT[s.id].slot===i-36;
+// slot ids: 0-35 backpack (0-8 hotbar), 36-38 armor, 40-57 the open chest, 60-62 accessories
+const getS=i=>i<36?inv[i]:i<39?P.arm[i-36]:i>=60?P.acc[i-60]:openChest>=0?chestOf(openChest)[i-40]:null;
+function setS(i,v){if(i<36)inv[i]=v;else if(i<39)P.arm[i-36]=v;else if(i>=60)P.acc[i-60]=v;else if(openChest>=0)chestOf(openChest)[i-40]=v}
+const hasAcc=(k,skip=-1)=>P.acc.some((a,j)=>a&&j!==skip&&IT[a.id].acc===k);
+const fits=(i,s)=>!s||i<36||i>=40&&i<58||(i<39?IT[s.id].slot===i-36:!!IT[s.id].acc&&!hasAcc(IT[s.id].acc,i-60));
+function bestTool(k){let b=null;for(const s of inv)if(s&&IT[s.id].kind===k&&(!b||IT[s.id].tier>IT[b.id].tier))b=s;return b&&IT[b.id]}
 const defense=()=>P.arm.reduce((a,s)=>a+(s?IT[s.id].defn:0),0);
 function addItem(id,n=1){
   for(let i=0;i<36&&n;i++){const s=inv[i];if(s&&s.id===id&&s.n<999){const a=Math.min(n,999-s.n);s.n+=a;n-=a;POP[i].x=.3}}
@@ -540,7 +579,10 @@ function projStep(dt){
 }
 
 // ===================== 12. player =====================
-function respawn(){Object.assign(P,{x:P.spawnX,y:P.spawnY,vx:0,vy:0,hp:P.mhp,dead:0,inv:2,swing:0,oy:0});HK.st=0;unstick();snapCam()}
+function respawn(){
+  let x=P.spawnX,y=P.spawnY;
+  if(P.bed>=0){if(T[P.bed]===BED){x=P.bed%W+.2;y=(P.bed/W|0)+1-P.h-.01}else{P.bed=-1;toast('Your bed was destroyed',BAD)}}
+  Object.assign(P,{x,y,vx:0,vy:0,hp:P.mhp,dead:0,inv:2,swing:0,oy:0});HK.st=0;unstick();snapCam()}
 function die(){P.dead=3;P.hp=0;snd.die();kick(12);burst(P.x+P.w/2,P.y+P.h/2,'#d83a4a',30,7,1)}
 function hurtPlayer(d,dir){
   if(P.inv>0||P.dead>0)return;
@@ -554,13 +596,15 @@ function snapCam(){const vw=BW/TS,vh=BH/TS;cam.sx.x=cam.x=clamp(P.x+P.w/2-vw/2,0
 function playerStep(dt){
   const L=keys.KeyA||keys.ArrowLeft,Rr=keys.KeyD||keys.ArrowRight,dir=(Rr?1:0)-(L?1:0),held=keys.Space||keys.KeyW||keys.ArrowUp;
   P.drop=!!(keys.KeyS||keys.ArrowDown);
-  const tgt=dir*8.5,skidding=dir&&P.vx*dir<-3&&P.ground,ice=P.ground&&tile(P.x+P.w/2|0,P.y+P.h+.05|0)===ICE;
+  const fast=hasAcc('speed'),tgt=dir*8.5*(fast?1.35:1),skidding=dir&&P.vx*dir<-3&&P.ground,ice=!fast&&P.ground&&tile(P.x+P.w/2|0,P.y+P.h+.05|0)===ICE;
   const a=(dir?(P.ground?68:36)*(P.vx*dir<0?1.9:1):(P.ground?58:8))*(ice?.18:1);
   P.vx=approach(P.vx,tgt,a*dt);
   P.skid=skidding?.12:Math.max(0,P.skid-dt);
   P.coy=P.ground?.1:P.coy-dt;P.buf-=dt;
   if(HK.st===2&&(P.buf>0||P.drop)){HK.st=0;P.coy=.1}
+  if(P.ground)P.jumps=1;
   if(P.buf>0&&P.coy>0){P.vy=-21;P.coy=0;P.buf=0;P.sq.x=.2;snd.jump();burst(P.x+P.w/2,P.y+P.h,PART_COL[tile(P.x+P.w/2|0,P.y+P.h|0)]||RAMP.dirt[2],5,2.5,.35)}
+  else if(P.buf>0&&P.jumps>0&&HK.st!==2&&hasAcc('jump')){P.vy=-18;P.jumps=0;P.buf=0;P.sq.x=.15;tone(330,700,.14,'sine',.08);burst(P.x+P.w/2,P.y+P.h,WHITE,12,3,.45,2)} // cloud puff
   P.vy=Math.min(P.vy+54*dt*(P.vy<0&&!held?2.6:P.vy>0?1.2:1),34);
   hookStep(dt);
   const g0=P.ground,vy0=P.vy;P.lastVy=vy0;
@@ -576,7 +620,8 @@ function playerStep(dt){
   if(P.skid>0&&Math.random()<.5)burst(P.x+P.w/2,P.y+P.h,RAMP.dirt[3],1,2,.3,6);
   P.turn=Math.max(0,P.turn-dt);P.inv=Math.max(0,P.inv-dt);P.hurtT=Math.max(0,P.hurtT-dt);
   P.regen+=dt;
-  if(P.regen>3&&P.hp<P.mhp)P.hp=Math.min(P.mhp,P.hp+(1.5+(P.ground&&sp<.5?4:0))*dt);
+  const rg=hasAcc('regen');if(P.regen>(rg?1:3)&&P.hp<P.mhp)P.hp=Math.min(P.mhp,P.hp+(1.5+(P.ground&&sp<.5?4:0)+(rg?3:0))*dt);
+  P.autoT=Math.max(0,P.autoT-dt);
   return dir;
 }
 function fireHook(){
@@ -621,7 +666,7 @@ function tryPlace(it,tx,ty){
   if(!REACHF(tx,ty)||tile(tx,ty)!==AIR||ty<1||ty>=H-1)return bad();
   const nb=BGW[ty*W+tx]||[[1,0],[-1,0],[0,1],[0,-1]].some(([a,b])=>{const n=tile(tx+a,ty+b);return n!==AIR&&n!==LEAF});
   if(!nb)return bad();
-  if((t===BENCH||t===FURN)&&!(SOLID[tile(tx,ty+1)]||tile(tx,ty+1)===PLAT))return bad();
+  if((t===BENCH||t===FURN||t===BED)&&!(SOLID[tile(tx,ty+1)]||tile(tx,ty+1)===PLAT))return bad();
   if(SOLID[t]&&(overlap(P,tx,ty)||enemies.some(e=>overlap(e,tx,ty))))return bad();
   setTile(tx,ty,t);if(t===CHEST)chests.set(ty*W+tx,Array(18).fill(null));sandCheck(tx,ty);
   const s=inv[sel];s.n--;POP[sel].x=-.25;if(!s.n)inv[sel]=null;snd.place();return true;
@@ -638,6 +683,8 @@ function useItem(it,s){ // consumables and summons; returns true if one was spen
     if(P.hp>=P.mhp){toast('Already at full health',GREY_T);return snd.no()}
     P.hp=Math.min(P.mhp,P.hp+70);snd.heal();floatText(cx,P.y,'+70',RAMP.grass[3]);potionCd=1.5}
   else if(it.use==='life'){if(P.mhp>=200){toast('Max health reached',GREY_T);return snd.no()}P.mhp+=20;P.hp+=20;snd.heal();toast('Max health +20',RAMP.grass[3])}
+  else if(it.acc){const k=P.acc.indexOf(null);if(hasAcc(it.acc)){toast('Already wearing one',GREY_T);return snd.no()}if(k<0){toast('Accessory slots are full',GREY_T);return snd.no()}
+    P.acc[k]={id:s.id,n:1};s.n--;if(!s.n)inv[sel]=null;snd.clink();toast(it.name+' equipped',GOLD3);return true}
   else if(it.slot!==undefined){const old=P.arm[it.slot];P.arm[it.slot]={id:s.id,n:1};s.n--;if(old)addItem(old.id,1);snd.clink();toast('Defense '+defense(),GOLD3);if(!s.n)inv[sel]=null;return true}
   else if(boss){toast('A boss is already here',BAD);return snd.no()}
   else if(it.use==='boss1'){if(L>.35||P.y>hs[clamp(cx|0,0,W-1)]+10){toast('Only works at night, on the surface',GREY_T);return snd.no()}
@@ -669,16 +716,17 @@ function playerAct(dt,dir){
           shoot(cx,P.y+.6,Math.cos(a)*sp,Math.sin(a)*sp,Math.round(DMG[it.tier]*.8)+4,true,'arrow');kick(.6)}
         else{P.fire=.5;toast('No arrows',RAMP.copper[3]);snd.no()}}
     }else if(!t&&BGW[ty*W+tx]&&REACHF(tx,ty)){ // knock out a background wall
-      if(mine.x!==tx||mine.y!==ty){mine.x=tx;mine.y=ty;mine.p=0}mining=true;mine.p+=dt*(it&&it.kind!==undefined?POW[it.tier]:.5)/.35;
+      if(mine.x!==tx||mine.y!==ty){mine.x=tx;mine.y=ty;mine.p=0}mining=true;const wt=bestTool(KP)||it;if(wt&&wt.kind!==undefined){P.auto=TOOLID(wt.kind,wt.tier);P.autoT=.25}mine.p+=dt*(wt&&wt.kind!==undefined?POW[wt.tier]:.5)/.35;
       if(P.swing<=0){P.swingMax=.3;P.swing=.3;P.swingKind=0}
       if(mine.p>=1){BGW[ty*W+tx]=0;mapTile(tx,ty);drop(66,tx+.5,ty+.5);burst(tx+.5,ty+.5,RAMP.wood[1],8,4,.5);snd.brk();mine.x=-1;mine.p=0}
     }else if(t>0&&REACHF(tx,ty)&&ty<H-1){
       if(mine.x!==tx||mine.y!==ty){mine.x=tx;mine.y=ty;mine.p=0}
-      const pickOk=!(NEEDT[t]>0&&!(it&&it.kind===KP&&it.tier>=NEEDT[t]));
+      const tool=bestTool(TOOLK[t]); // auto-tool: always mine with the best matching tool you carry
+      const pickOk=!(NEEDT[t]>0&&!(tool&&tool.kind===KP&&tool.tier>=NEEDT[t]));
       if(!pickOk){if(mine.chip<=0){toast('Needs a better pickaxe',RAMP.copper[3]);snd.no();mine.chip=.8}mine.chip-=dt}
       else{
         mining=true;
-        const m=it&&it.kind===TOOLK[t]?POW[it.tier]:.3;
+        const m=tool?POW[tool.tier]:.3;if(tool){P.auto=TOOLID(tool.kind,tool.tier);P.autoT=.25}
         mine.p+=dt*m/HARD[t];
         if(P.swing<=0){P.swingMax=.34/Math.sqrt(Math.max(.3,m));P.swing=P.swingMax;P.swingKind=0}
         mine.chip-=dt;if(mine.chip<=0){mine.chip=.12;burst(tx+.5,ty+.5,PART_COL[t]||'#fff',2,3,.4);snd.mine()}
@@ -691,7 +739,8 @@ function playerAct(dt,dir){
     if((t===DOOR||t===DOORO)&&REACHF(tx,ty)){
       if(mouse.rEdge){if(t===DOORO&&(overlap(P,tx,ty)||enemies.some(e=>overlap(e,tx,ty))))snd.no();else{setTile(tx,ty,t===DOOR?DOORO:DOOR);snd.place()}mouse.rEdge=false}}
     else if((t===CHEST||t===CHESTO)&&REACHF(tx,ty)){if(mouse.rEdge){const i=ty*W+tx,was=openChest===i;closeChest();if(!was){openChest=i;setTile(tx,ty,CHESTO);invOpen=true;snd.chest()}mouse.rEdge=false}}
-    else if(it&&(it.use||it.slot!==undefined)&&mouse.rEdge){useItem(it,s);mouse.rEdge=false}
+    else if(t===BED&&REACHF(tx,ty)){if(mouse.rEdge){P.bed=ty*W+tx;toast('Spawn point set',GOOD);snd.heal();mouse.rEdge=false}}
+    else if(it&&(it.use||it.slot!==undefined||it.acc)&&mouse.rEdge){useItem(it,s);mouse.rEdge=false}
     else if(it&&it.tile&&placeCd<=0){tryPlace(it,tx,ty);placeCd=.12}
     else if(it&&it.wall&&placeCd<=0){placeWall(tx,ty);placeCd=.05}
   }
@@ -932,7 +981,7 @@ function stepEnemies(dt){
 }
 // ===================== 15. world rendering (pixel-perfect buffer) =====================
 let BX=0,BY=0;
-const GRP=[0,1,1,2,2,2,3,4,5,5,2,6,5,7,7,2,2,8,5,5,9,10,11,12,13];
+const GRP=[0,1,1,2,2,2,3,4,5,5,2,6,5,7,7,2,2,8,5,5,9,10,11,12,13,5];
 const WALLT=[RAMP.dirt,RAMP.stone,RAMP.slate,RAMP.sstone,RAMP.ice].map(r=>[0,1,2,3].map(()=>{const cv=mkc(16,16),c=cv.getContext('2d');
   for(let j=0;j<16;j++)for(let i=0;i<16;i++)dot(c,i,j,tr()<.14?r[1]:r[0]);
   c.fillStyle='rgba(18,15,30,.5)';c.fillRect(0,7,16,1);c.fillRect(0,15,16,1);c.fillRect(tr()*14|0,0,1,7);c.fillRect(tr()*14|0,8,1,7);return cv}));
@@ -1056,7 +1105,7 @@ function swingBeta(p,kind){ // arm angle from the facing axis, clockwise-down po
 function drawPlayer(){
   if(P.dead>0)return;armorLook();
   if(P.inv>0&&P.hurtT<=0&&Math.floor(P.inv*22)%2)return;
-  const sp=Math.abs(P.vx),it=inv[sel]&&IT[inv[sel].id];
+  const hid=P.autoT>0?P.auto:inv[sel]&&inv[sel].id,sp=Math.abs(P.vx),it=hid&&IT[hid]; // shows the auto-picked tool while mining
   let s;
   if(!P.ground)s=P.vy<-1?playerSpr('jump'):playerSpr('fall');
   else if(P.skid>0)s=playerSpr('skid');
@@ -1084,9 +1133,9 @@ function drawPlayer(){
   line(g,shX,shY,hx,hy,5,INK);line(g,shX,shY,mx,my,3,PK.pal.shirt);line(g,mx,my,hx,hy,3,SK.skin);
   if(it){
     const dirA=Math.atan2(Math.sin(beta),P.face*Math.cos(beta));
-    if(it.kind===KB){g.save();g.translate(hx,hy);g.rotate(Math.round(dirA/.3927)*.3927);g.drawImage(ICON[inv[sel].id],-9,-9);g.restore()}
-    else if(it.kind!==undefined){g.save();g.translate(hx,hy);g.rotate(Math.round((dirA+.7854)/.3927)*.3927);g.drawImage(ICON[inv[sel].id],-4,-14);g.restore()}
-    else{const ic=ICON[inv[sel].id];g.drawImage(ic,hx-4+P.face*3,hy-5,8,8)}
+    if(it.kind===KB){g.save();g.translate(hx,hy);g.rotate(Math.round(dirA/.3927)*.3927);g.drawImage(ICON[hid],-9,-9);g.restore()}
+    else if(it.kind!==undefined){g.save();g.translate(hx,hy);g.rotate(Math.round((dirA+.7854)/.3927)*.3927);g.drawImage(ICON[hid],-4,-14);g.restore()}
+    else{const ic=ICON[hid];g.drawImage(ic,hx-4+P.face*3,hy-5,8,8)}
   }
   // grip pixel in front of the skin keeps the hand readable
   dot(g,hx,hy,SK.skin,2,2);
@@ -1171,8 +1220,8 @@ function revealMap(){ // ponytail: reveals a disc around the player even through
 }
 
 // ===================== 17. UI primitives (native resolution overlay) =====================
-const hits=[],US={inv:mkSpring(0),title:mkSpring(1),sel:mkSpring(0),zone:mkSpring(0),tx:mkSpring(),ty:mkSpring(),map:mkSpring(0),death:mkSpring(0)};
-let zoneName='',zoneCol=RAMP.gold[3],CR=null,invOpen=false,showTitle=true,mapOn=false,carry=-1,pressedId='',craftScroll=0,lastZone=-1,zoneT=0,resetArm=0,tip=null,frameNo=0,rowFlash={id:-1,t:0,ok:true};
+const hits=[],US={full:mkSpring(0),inv:mkSpring(0),title:mkSpring(1),sel:mkSpring(0),zone:mkSpring(0),tx:mkSpring(),ty:mkSpring(),map:mkSpring(0),death:mkSpring(0)};
+let zoneName='',zoneCol=RAMP.gold[3],CR=null,invOpen=false,showTitle=true,mapOn=0,craftQ='',craftFocus=false,craftOnly=false,carry=-1,pressedId='',craftScroll=0,lastZone=-1,zoneT=0,resetArm=0,tip=null,frameNo=0,rowFlash={id:-1,t:0,ok:true};
 const GREY='#9aa2bd',GOLD3=RAMP.gold[3],BAD='#ff8a8e',GOOD=RAMP.grass[3];
 const ts=(s,sc=2)=>tw(s,Math.max(1,Math.round(sc*DPR))/DPR);
 const T2=(s,x,y,col=WHITE,sc=2,al=0)=>txt(u,s,x,y,sc,col,INK,DPR,al);
@@ -1269,8 +1318,18 @@ function drawHUD(dt){
   if(toastT>0){toastT-=dt;const w=ts(toastM)+32;u.globalAlpha=clamp(toastT*3,0,1);panel(Math.round(VW/2-w/2),y0-80,w,36,10,false);T2(toastM,VW/2,y0-80+11,toastC,2,1);u.globalAlpha=1}
   if(!invOpen&&nearStation(1))T2('E: CRAFT',VW-16,VH-28,'rgba(255,255,255,.55)',1,2);
 }
+function drawFullMap(dt){ // whole explored world, fitted to the screen
+  spring(US.full,mapOn===2?1:0,dt,.3);const a=clamp(US.full.x,0,1);if(a<.02)return;u.globalAlpha=a;
+  const w=VW-64,h=VH-140,x=32,y=24;panel(x,y,w,h,16,'solid');T2('WORLD MAP',x+20,y+14,WHITE,2);T2('M TO CLOSE',x+w-20,y+16,GREY,1.5,2);
+  const k=Math.min((w-40)/W,(h-64)/H),mw=Math.round(W*k),mh=Math.round(H*k),mx=Math.round(x+(w-mw)/2),my=y+48;
+  u.fillStyle=INK;u.fillRect(mx,my,mw,mh);u.imageSmoothingEnabled=false;u.drawImage(mm,mx,my,mw,mh);
+  const pin=(wx,wy,col,z)=>{const px=Math.round(mx+wx*k),py=Math.round(my+wy*k);u.fillStyle=INK;u.fillRect(px-z/2-1,py-z/2-1,z+2,z+2);u.fillStyle=col;u.fillRect(px-z/2,py-z/2,z,z)};
+  if(P.bed>=0)pin(P.bed%W+.5,(P.bed/W|0)+.5,GOLD3,6);
+  for(const e of enemies)if(ET[e.t].boss)pin(e.x+e.w/2,e.y+e.h/2,'#d83a4a',8);
+  pin(P.x+P.w/2,P.y+P.h/2,Math.floor(tAbs*3)%2?WHITE:GOLD3,6);u.globalAlpha=1;
+}
 function drawMap(dt){
-  spring(US.map,mapOn?1:0,dt,.3);if(US.map.x<.02)return;
+  spring(US.map,mapOn===1?1:0,dt,.3);if(US.map.x<.02)return;
   const w=208,h=128,x=VW-w-16,y=16-Math.round((1-US.map.x)*20);u.globalAlpha=clamp(US.map.x,0,1);
   panel(x,y,w,h,14,true);
   const vw=96,vh=56,cx=clamp(P.x-vw/2,0,W-vw),cy=clamp(P.y-vh/2,0,H-vh);
@@ -1298,7 +1357,7 @@ function drawInventory(dt){
   spring(US.inv,invOpen?1:0,dt,.3);const a=clamp(US.inv.x,0,1);if(a<.01)return;const h0=hits.length;
   const SLZ=SL(),gap=8,pw=9*SLZ+8*gap+32,ph=56+4*(SLZ+gap)+44,cw=VW>=800?296:Math.max(200,Math.min(260,VW-pw-32)),top=24;
   const total=pw+16+cw,ox=Math.max(8,Math.round((VW-total)/2));
-  const rows=clamp(Math.floor((VH-top-120-72)/56),3,9),chh=64+rows*56+8;
+  const rows=clamp(Math.floor((VH-top-120-72-36)/56),3,9),chh=100+rows*56+8;
   u.save();const ax=VW/2,ay=VH-60,s=lerp(.86,1,Math.min(1,US.inv.x));u.translate(ax,ay);u.scale(s,s);u.translate(-ax,-ay);u.globalAlpha=a;
   // left: inventory + armor row
   uiHit(ox,top,pw,ph,'bgL',()=>{});uiHit(ox+pw+16,top,cw,chh,'bgR',()=>{});CR={x:ox+pw+16,y:top,w:cw,h:chh};
@@ -1307,8 +1366,8 @@ function drawInventory(dt){
   button(ox+pw-16-120,top+10,120,28,resetArm>0?'SURE?':'NEW WORLD','reset',()=>{if(resetArm>0){resetSave();resetArm=0}else{resetArm=3;toast('Click again to wipe this world',BAD);snd.no()}},resetArm>0?BAD:GREY);
   for(let r=0;r<3;r++)for(let c=0;c<9;c++)slotBox(9+r*9+c,ox+16+c*(SLZ+gap),top+56+r*(SLZ+gap),SLZ,false);
   const ay2=top+56+3*(SLZ+gap)+4;
-  for(let k=0;k<3;k++)slotBox(36+k,ox+16+k*(SLZ+gap),ay2,SLZ,false,ARMID(2,k));
-  T2('ARMOR   DEF '+defense(),ox+16+3*(SLZ+gap)+6,ay2+SLZ/2-7,GOLD3,2);
+  for(let k=0;k<3;k++){slotBox(36+k,ox+16+k*(SLZ+gap),ay2,SLZ,false,ARMID(2,k));slotBox(60+k,ox+16+(k+4)*(SLZ+gap),ay2,SLZ,false,73+k)}
+  T2('DEF',ox+16+7*(SLZ+gap)+6,ay2+2,GREY,1.5);T2(defense(),ox+16+7*(SLZ+gap)+6,ay2+SLZ/2,GOLD3,2);
   T2('Q THROWS THE HELD STACK.  CLICK OUTSIDE TO DROP',ox+16,ay2+SLZ+14,'rgba(255,255,255,.45)',1);
   T2(goal(),ox+16,ay2+SLZ+28,GOOD,1);
   // chest storage panel under the inventory
@@ -1322,10 +1381,19 @@ function drawInventory(dt){
   T2('CRAFTING',cx+16,top+16,WHITE,2);
   const hb=nearStation(1),fu=nearStation(2);
   T2('FURNACE',cx+cw-16,top+10,fu?GOOD:'rgba(255,255,255,.3)',1.5,2);T2('BENCH',cx+cw-24-ts('FURNACE',1.5),top+10,hb?GOOD:'rgba(255,255,255,.3)',1.5,2);
-  const list=R.map((r,i)=>({r,i,ok:canCraft(r)})).sort((a,b)=>(b.ok-a.ok)||a.i-b.i);
+  // search box (matches the result or any ingredient) + craftable-only toggle
+  const sbw=cw-24-104,sx2=cx+12,sy2=top+44,q=craftQ.trim().toLowerCase();
+  uiHit(sx2,sy2,sbw,28,'search',()=>{craftFocus=true});
+  sq(u,sx2,sy2,sbw,28,8);u.fillStyle=craftFocus?'rgba(255,255,255,.16)':'rgba(255,255,255,.07)';u.fill();sq(u,sx2+.5,sy2+.5,sbw-1,27,8);u.strokeStyle=craftFocus?GOLD3:'rgba(255,255,255,.18)';u.lineWidth=1;u.stroke();
+  const shown=craftQ||(craftFocus?'':'Search...');T2(shown,sx2+10,sy2+7,craftQ?WHITE:'rgba(255,255,255,.35)',1.5);
+  if(craftFocus&&Math.floor(tAbs*2)%2===0)u.fillStyle=WHITE,u.fillRect(sx2+12+ts(craftQ,1.5),sy2+6,2,16);
+  button(cx+cw-12-96,sy2,96,28,craftOnly?'CAN MAKE':'ALL','conly',()=>{craftOnly=!craftOnly;craftScroll=0;snd.ui()},craftOnly?GOOD:GREY);
+  const nm=id=>IT[id].name.toLowerCase();
+  const list=R.map((r,i)=>({r,i,ok:canCraft(r)})).filter(e=>(!craftOnly||e.ok)&&(!q||nm(e.r.out).includes(q)||e.r.need.some(([id])=>nm(id).includes(q)))).sort((a,b)=>(b.ok-a.ok)||a.i-b.i);
+  if(!list.length)T2(craftOnly&&!q?'NOTHING CRAFTABLE HERE YET':'NO MATCHES',cx+cw/2,top+110,GREY,1.5,1);
   craftScroll=clamp(craftScroll,0,Math.max(0,list.length-rows));
   list.slice(craftScroll,craftScroll+rows).forEach((e,k)=>{
-    const r=e.r,x=cx+12,y=top+48+k*56,w=cw-24,h=52,id='r'+e.i;
+    const r=e.r,x=cx+12,y=top+84+k*56,w=cw-24,h=52,id='r'+e.i;
     const tl=[[IT[r.out].name+(r.n>1?' x'+r.n:''),WHITE],[r.st===1?'Needs a workbench':r.st===2?'Needs a furnace':'No station needed',r.st&&!nearStation(r.st)?BAD:GREY]];
     const hv=uiHit(x,y,w,h,id,()=>{const ok=craft(r);rowFlash={id:e.i,t:.35,ok};if(!ok)toast(nearStation(r.st)?'Not enough materials':'Need a '+(r.st===1?'workbench':'furnace')+' nearby',BAD)},tl.concat(tipFor(r.out).slice(1)));
     const pr=pressedId===id;sq(u,x,y,w,h,10);
@@ -1338,7 +1406,7 @@ function drawInventory(dt){
   });
   if(list.length>rows){T2('SCROLL '+(craftScroll+1)+'-'+Math.min(list.length,craftScroll+rows)+' OF '+list.length,cx+cw-16,top+chh-20,'rgba(255,255,255,.4)',1,2)}
   u.restore();u.globalAlpha=1;
-  rowFlash.t-=dt;if(!invOpen){hits.length=h0;tip=null} // a closing panel must not swallow clicks
+  rowFlash.t-=dt;if(!invOpen){hits.length=h0;tip=null;craftFocus=false} // a closing panel must not swallow clicks
 }
 function drawTitle(dt){
   spring(US.title,showTitle?1:0,dt,.35);const a=clamp(US.title.x,0,1);if(a<.01)return;
@@ -1350,7 +1418,7 @@ function drawTitle(dt){
   u.save();u.beginPath();u.rect(x,y+wob,w,Math.round(sc*3));u.clip();T2(title,x,y+wob,RAMP.gold[3],sc);u.restore();
   const sp=Math.floor(tAbs*3)%4;u.fillStyle=WHITE;u.fillRect(x+w-sc*2,y+wob-6,sc>6?4:2,sc>6?4:2);if(sp===1)u.fillRect(x+sc*3,y+wob+sc*2,2,2);
   T2('DIG DEEP. BUILD HIGH. SURVIVE THE NIGHT.',VW/2,y+sc*9+24,'#d4cce8',2,1);
-  const cw=Math.min(560,VW-32),rowsC=[['A / D  OR  ARROWS','MOVE'],['SPACE  OR  W','JUMP  (COYOTE + BUFFERED)'],['S','DROP THROUGH PLATFORMS'],['LEFT CLICK','MINE  /  SWING  /  SHOOT'],['RIGHT CLICK','PLACE  /  USE  /  OPEN CHEST'],['1-9  OR  WHEEL','HOTBAR'],['E  /  Q','INVENTORY  /  THROW STACK'],['F','GRAPPLING HOOK'],['M  /  N  /  H','MINIMAP  /  MUTE  /  HELP'],['ESC','PAUSE']];
+  const cw=Math.min(560,VW-32),rowsC=[['A / D  OR  ARROWS','MOVE'],['SPACE  OR  W','JUMP  (COYOTE + BUFFERED)'],['S','DROP THROUGH PLATFORMS'],['LEFT CLICK','MINE  /  SWING  /  SHOOT'],['RIGHT CLICK','PLACE  /  USE  /  OPEN CHEST'],['1-9  OR  WHEEL','HOTBAR'],['E  /  Q','INVENTORY  /  THROW STACK'],['F','GRAPPLING HOOK'],['M  /  N  /  H','MAP  /  SOUND  /  HELP'],['ESC','PAUSE']];
   const ph=rowsC.length*24+112,py=Math.round(y+sc*9+64);
   panel(Math.round((VW-cw)/2),py,cw,ph,16,true);
   rowsC.forEach((r,i)=>{T2(r[0],Math.round((VW-cw)/2)+24,py+20+i*24,GOLD3,2);T2(r[1],Math.round((VW-cw)/2)+cw*.42,py+20+i*24,WHITE,2)});
@@ -1371,7 +1439,7 @@ function drawUI(dt){
   frameNo++;u.setTransform(DPR,0,0,DPR,0,0);u.clearRect(0,0,VW,VH);u.imageSmoothingEnabled=false;
   hits.length=0;tip=null;resetArm=Math.max(0,resetArm-dt);
   for(let i=0;i<36;i++)spring(POP[i],0,dt,.25);
-  if(!showTitle){drawHUD(dt);drawMap(dt);drawInventory(dt)}
+  if(!showTitle){drawHUD(dt);drawMap(dt);drawFullMap(dt);drawInventory(dt)}
   drawDeath(dt);drawOverlay(dt);drawTitle(dt);drawTip();
 }
 // ===================== 18. save / load / new game =====================
@@ -1380,7 +1448,7 @@ function packSeen(){const n=Math.ceil(W*H/8),b=new Uint8Array(n);for(let i=0;i<W
 function unpackSeen(str){try{const s=atob(str);if(s.length!==Math.ceil(W*H/8))return;for(let i=0;i<W*H;i++)if(s.charCodeAt(i>>3)>>(i&7)&1)seen[i]=1}catch(e){}}
 function save(){
   const pk=a=>a.map(s=>s?[s.id,s.n]:0),walls=[];for(let i=0;i<W*H;i++)if(BGW[i])walls.push(i);
-  try{localStorage.setItem(KEY,JSON.stringify({v:3,seed,x:P.x,y:P.y,hp:P.hp,mhp:P.mhp,sel,time,inv:pk(inv),arm:pk(P.arm),boss1:P.boss1,won:P.won,
+  try{localStorage.setItem(KEY,JSON.stringify({v:3,seed,x:P.x,y:P.y,hp:P.hp,mhp:P.mhp,sel,time,inv:pk(inv),arm:pk(P.arm),acc:pk(P.acc),bed:P.bed,boss1:P.boss1,won:P.won,
     ch:Array.from(changes).flat(),walls,chests:Array.from(chests).map(([i,a])=>[i,pk(a)]),map:packSeen()}))}catch(e){}
 }
 function loadSave(){ // untrusted input: validate everything
@@ -1393,7 +1461,8 @@ function loadSave(){ // untrusted input: validate everything
     s.arm=[0,1,2].map(k=>{const a=Array.isArray(s.arm)?st(s.arm[k]):null;return a&&IT[a.id].slot===k?{id:a.id,n:1}:null});
     s.walls=Array.isArray(s.walls)?s.walls.filter(i=>Number.isInteger(i)&&i>=0&&i<W*H):[];
     s.chests=Array.isArray(s.chests)?s.chests.filter(c=>Array.isArray(c)&&Number.isInteger(c[0])&&c[0]>=0&&c[0]<W*H&&Array.isArray(c[1])).map(c=>[c[0],Array.from({length:18},(_,k)=>st(c[1][k]))]):[];
-    s.boss1=!!s.boss1;s.won=!!s.won;
+    s.boss1=!!s.boss1;s.won=!!s.won;s.bed=Number.isInteger(s.bed)&&s.bed>=0&&s.bed<W*H?s.bed:-1;
+    const seenAcc=new Set();s.acc=[0,1,2].map(k=>{const a=Array.isArray(s.acc)?st(s.acc[k]):null,kind=a&&IT[a.id].acc;if(!kind||seenAcc.has(kind))return null;seenAcc.add(kind);return{id:a.id,n:1}});
     const ch=[];for(let i=0;i<s.ch.length;i+=2){const a=s.ch[i],b=s.ch[i+1];if(Number.isInteger(a)&&a>=0&&a<W*H&&Number.isInteger(b)&&b>=0&&b<NT)ch.push(a,b)}
     s.map=typeof s.map==='string'&&s.map.length<30000?s.map:'';s.ch=ch;s.mhp=clamp(Number(s.mhp)||100,100,400);s.hp=clamp(Number(s.hp)||s.mhp,1,s.mhp);s.sel=clamp(s.sel|0,0,8);s.time=clamp(Number(s.time)||.15,0,.9999);
     return s;
@@ -1409,9 +1478,9 @@ function newGame(sd,sv){
   if(sv&&sv.map){unpackSeen(sv.map);for(let i=0;i<W*H;i++)if(seen[i])mapTile(i%W,i/W|0);mmg.putImageData(mmd,0,0)}
   inv.fill(null);mine.x=-1;carry=-1;
   const sx0=W/2;P.spawnX=sx0+.2;P.spawnY=hs[sx0]-P.h-.01;
-  Object.assign(P,{vx:0,vy:0,dead:0,inv:0,swing:0,oy:0,mhp:100,hp:100,x:P.spawnX,y:P.spawnY,arm:[null,null,null],boss1:false,won:false});
+  Object.assign(P,{vx:0,vy:0,dead:0,inv:0,swing:0,oy:0,mhp:100,hp:100,x:P.spawnX,y:P.spawnY,arm:[null,null,null],acc:[null,null,null],bed:-1,boss1:false,won:false});
   sel=0;time=.15;
-  if(sv){sv.inv.forEach((s,i)=>{inv[i]=s});Object.assign(P,{x:sv.x,y:sv.y,hp:sv.hp,mhp:sv.mhp,arm:sv.arm,boss1:sv.boss1,won:sv.won});sel=sv.sel;time=sv.time}
+  if(sv){sv.inv.forEach((s,i)=>{inv[i]=s});Object.assign(P,{x:sv.x,y:sv.y,hp:sv.hp,mhp:sv.mhp,arm:sv.arm,acc:sv.acc,bed:sv.bed,boss1:sv.boss1,won:sv.won});sel=sv.sel;time=sv.time}
   else{inv[0]={id:TOOLID(KP,0),n:1};inv[1]={id:TOOLID(KA,0),n:1};inv[2]={id:TOOLID(KS,0),n:1};inv[3]={id:11,n:6}}
   unstick();snapCam();revealMap();lastZone=-1;
 }
@@ -1443,7 +1512,7 @@ function step(dt){
 function setM(e){mouse.x=e.clientX;mouse.y=e.clientY;mouse.moved=true}
 addEventListener('mousemove',setM);
 addEventListener('mousedown',e=>{
-  setM(e);audio();
+  setM(e);audio();craftFocus=false; // the search box re-focuses itself through its hit handler
   if(showTitle){showTitle=false;return}
   for(let i=hits.length-1;i>=0;i--){const h=hits[i];if(over(h.x,h.y,h.w,h.h)){pressedId=h.id;mouse.ui=true;h.fn(e.button);return}}
   if(invOpen&&carry>=0){throwSlot(carry);carry=-1;mouse.ui=true;return}
@@ -1460,6 +1529,9 @@ addEventListener('wheel',e=>{
 addEventListener('keydown',e=>{
   audio();
   if(showTitle){showTitle=false;e.preventDefault();return}
+  if(craftFocus&&invOpen){ // typing into the crafting search box: swallow game keys
+    e.preventDefault();if(e.key==='Escape'||e.key==='Enter')craftFocus=false;else if(e.key==='Backspace')craftQ=craftQ.slice(0,-1);
+    else if(e.key.length===1&&GL[e.key]&&craftQ.length<18)craftQ+=e.key;craftScroll=0;return}
   if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Tab'].includes(e.code))e.preventDefault();
   keys[e.code]=true;
   if((e.code==='Space'||e.code==='KeyW'||e.code==='ArrowUp')&&!e.repeat)P.buf=.12;
@@ -1469,8 +1541,8 @@ addEventListener('keydown',e=>{
   else if(e.code==='Escape'||e.code==='KeyP'){if(invOpen&&e.code==='Escape'){invOpen=false;carry=-1}else paused=!paused}
   else if(e.code==='KeyQ'&&!paused){throwSlot(sel)}
   else if(e.code==='KeyF'&&!paused){fireHook()}
-  else if(e.code==='KeyM'){mapOn=!mapOn;snd.ui()}
-  else if(e.code==='KeyN'){muted=!muted;toast(muted?'Sound off':'Sound on')}
+  else if(e.code==='KeyM'){mapOn=(mapOn+1)%3;snd.ui()} // off -> minimap -> full map
+  else if(e.code==='KeyN'){if(!muted&&musicOn){musicOn=false;toast('Music off')}else if(!muted){muted=true;toast('All sound off')}else{muted=false;musicOn=true;toast('Sound on')}}
   else if(e.code==='KeyH')showTitle=true;
 });
 addEventListener('keyup',e=>{keys[e.code]=false});
@@ -1495,6 +1567,7 @@ function frame(now){
   requestAnimationFrame(frame);
   const dt=Math.min(Math.max((now-lastT)/1000,0),1/30);lastT=now;
   if(!showTitle&&!paused)step(dt);else tAbs+=dt;
+  if(!paused)musicStep();
   draw();drawUI(dt);
 }
 resize();
